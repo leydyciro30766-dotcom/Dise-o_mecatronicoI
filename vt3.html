@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCADA - Monitoreo Cultivo Hidropónico</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        /* ----------------------------------- */
+        /* 1. ESTILOS GLOBALES Y DE FUENTE */
+        /* ----------------------------------- */
+        @font-face {
+            font-family: 'Corabael'; /* Nombre de fuente simulado */
+            src: local('Arial Bold'), local('Helvetica Bold');
+            font-weight: bold;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #7fffd4; /* Verde Aguamarina (Fondo global) */
+            color: #333;
+            /* Estos estilos centran el login al inicio */
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* ----------------------------------- */
+        /* 2. ESTILOS DEL LOGIN (INICIO) */
+        /* ----------------------------------- */
+        #login-container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 300px;
+            max-width: 90%;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        #login-container h2 {
+            font-family: 'Corabael', sans-serif;
+            color: #5F9EA0; /* Azul Acero */
+            margin-bottom: 25px;
+            font-size: 1.8em;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #5F9EA0;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .login-button:hover {
+            background-color: #4682B4;
+        }
+
+        .register-link {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .register-link a {
+            color: #5F9EA0;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        /* ----------------------------------- */
+        /* 3. ESTILOS DEL MODAL (REGISTRO) */
+        /* ----------------------------------- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4); 
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; 
+            padding: 30px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* ----------------------------------- */
+        /* 4. ESTILOS DEL SCADA (MONITOREO) */
+        /* ----------------------------------- */
+        
+        /* Contenedor principal del SCADA (Oculto al inicio) */
+        #scada-container {
+            display: none; /* Oculto al inicio */
+            width: 100%;
+            height: 100vh;
+            justify-content: flex-start;
+            align-items: flex-start;
+        }
+
+        /* 🧭 Barra Lateral de Menú (Sidebar) */
+        .sidebar {
+            width: 70px; 
+            background-color: #333;
+            color: white;
+            padding-top: 0; 
+            position: fixed;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 20;
+            transition: width 0.3s;
+            overflow: hidden; 
+        }
+
+        /* Estado Desplegado: Aumenta el ancho */
+        .sidebar.expanded {
+            width: 250px; 
+        }
+
+        /* 🔽 Botón Desplegable (Toggle) */
+        .menu-toggle {
+            background-color: #575757;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 15px;
+            cursor: pointer;
+            font-size: 1.5em;
+            text-align: center;
+        }
+        
+        /* 📜 Opciones del Menú */
+        .menu-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            opacity: 0; 
+            transition: opacity 0.1s ease 0.3s;
+        }
+        
+        /* Estado Desplegado: Muestra las opciones */
+        .sidebar.expanded .menu-list {
+            opacity: 1; 
+        }
+
+        .menu-list li a {
+            padding: 15px 20px;
+            text-decoration: none;
+            color: white;
+            display: block;
+            white-space: nowrap; 
+            transition: background-color 0.3s;
+        }
+
+        .menu-list li a:hover {
+            background-color: #575757;
+        }
+
+        /* --- Estilos para el Submenú --- */
+        .submenu {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            background-color: #2a2a2a; 
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .submenu.show {
+            max-height: 200px; 
+        }
+
+        .submenu li a {
+            padding: 10px 20px 10px 40px; 
+            font-size: 0.9em;
+        }
+
+        .submenu li a:hover {
+            background-color: #3c3c3c;
+        }
+
+        /* 🖼️ Contenido Principal */
+        .main-content-wrapper {
+            transition: margin-left 0.3s;
+            margin-left: 70px; 
+            flex-grow: 1;
+            width: 100%;
+            min-height: 100vh;
+        }
+        
+        .sidebar.expanded + .main-content-wrapper {
+            margin-left: 250px;
+        }
+
+        /* 🔝 Encabezado */
+        header {
+            background-color: #5F9EA0;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        .header-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .logout-button {
+            background-color: #FF6347;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-left: auto;
+        }
+        
+        .content {
+            padding: 80px 20px 60px 20px;
+        }
+        
+        /* Botón Ir Atrás (Siempre visible) */
+        .back-button-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 15;
+            display: block; 
+        }
+
+        .back-button {
+            background-color: #4682B4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: bold;
+        }
+        
+        /* --- Estilos Comunes de Sección --- */
+        .dashboard-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        /* --- Estilos para Resultados (Tabla ELIMINADA) --- */
+        .analysis-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        /* .excel-table, etc. ELIMINADOS */
+        
+        .export-button {
+            background-color: #17a2b8; /* Cyan */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .export-button:hover {
+            background-color: #138496;
+        }
+        
+        /* --- Estilos de Análisis y Buscador --- */
+        .analysis-card {
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 5px solid #5F9EA0;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .search-container {
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .search-input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .search-input {
+            flex-grow: 1;
+            padding: 12px 15px;
+            border: 2px solid #ccc;
+            border-radius: 8px 0 0 8px;
+            font-size: 1em;
+            outline: none;
+        }
+        .search-button {
+            padding: 12px 15px;
+            background-color: #5F9EA0;
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+        }
+
+        .recommendation {
+            background-color: #fff3cd; 
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-weight: normal;
+        }
+        
+        /* Estilos para la simulación del tanque */
+        .tank-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .tank-simulation {
+            width: 100px;
+            height: 250px;
+            border: 4px solid #333;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column-reverse;
+            overflow: hidden;
+            margin: 20px auto;
+            position: relative;
+        }
+        .water-level {
+            width: 100%;
+            background-color: #00BFFF; /* Azul Profundo */
+            transition: height 0.5s ease-out;
+            position: relative;
+        }
+        .level-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px #333;
+        }
+        .measurement-display {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px dashed #ccc;
+            border-radius: 5px;
+        }
+        .measurement-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            display: block;
+        }
+        
+        /* Estilos para la calculadora de salinidad ELIMINADOS */
+    </style>
+</head>
+<body>
+
+    <div id="login-container">
+        <h2>Ingreso al SCADA</h2>
+        <form id="login-form">
+            <div class="input-group">
+                <label for="username">Usuario / Correo:</label>
+                <input type="text" id="username" required>
+            </div>
+            <div class="input-group">
+                <label for="password">Contraseña:</label>
+                <input type="password" id="password" required>
+            </div>
+            <button type="submit" class="login-button">Iniciar Sesión</button>
+        </form>
+        <div class="register-link">
+            ¿No tienes cuenta? <a href="#" onclick="openModal()">Solicitar Registro</a>
+        </div>
+    </div>
+
+    <div id="scada-container" style="display: none;">
+        
+        <div class="sidebar" id="mySidebar">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button> 
+            
+            <ul class="menu-list">
+                <li><a href="#" onclick="loadContent('Home', true); return false;">Home</a></li> 
+
+                <li class="menu-item-with-submenu">
+                    <a href="#" onclick="toggleSubmenu(event, 'medicionSubmenu')">Medición ▼</a>
+                    <ul class="submenu" id="medicionSubmenu">
+                        <li><a href="#" id="link-ph" onclick="loadContent('pH', true); return false;">pH</a></li>
+                        <li><a href="#" id="link-ce" onclick="loadContent('CE', true); return false;">CE</a></li>
+                        <li><a href="#" id="link-nivel" onclick="loadContent('Nivel', true); return false;">Nivel</a></li>
+                    </ul>
+                </li>
+
+                <li><a href="#" onclick="loadContent('Buscador', true); return false;">Buscador</a></li>
+
+                <li><a href="#" onclick="loadContent('Resultados', true); return false;">Resultados Diarios</a></li>
+                
+                <li><a href="#" onclick="loadContent('Analisis', true); return false;">Análisis</a></li>
+            </ul>
+        </div>
+
+        <div class="main-content-wrapper" id="mainWrapper">
+            
+            <header>
+                <div class="header-title">Monitoreo Cultivo</div>
+                <button class="logout-button" onclick="simularLogout()">Cerrar Sesión</button>
+            </header>
+
+            <main class="content" id="mainContent">
+                </main>
+            
+            <div class="back-button-container" id="backButtonContainer">
+                <button class="back-button" onclick="irAtras()">Ir Atrás</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h2>Solicitud de Registro</h2>
+            <form id="register-form">
+                <div class="input-group">
+                    <label for="reg-nombre">Nombre:</label>
+                    <input type="text" id="reg-nombre" required>
+                </div>
+                <div class="input-group">
+                    <label for="reg-correo">Correo Electrónico (Será su usuario):</label>
+                    <input type="email" id="reg-correo" required>
+                </div>
+                <div class="input-group">
+                    <label for="reg-password">Contraseña (Mín. 6 caracteres):</label>
+                    <input type="password" id="reg-password" minlength="6" required>
+                </div>
+                <div class="input-group">
+                    <label for="reg-cargo">Cargo/Función:</label>
+                    <input type="text" id="reg-cargo" required>
+                </div>
+                <button type="submit" class="login-button">Registrar y Entrar</button>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+    let phChart;
+    let nivelChart;
+    
+    // --- Referencias a los contenedores principales ---
+    const loginContainer = document.getElementById('login-container');
+    const scadaContainer = document.getElementById('scada-container');
+
+    // ** VARIABLES PARA MQTT Y VALORES EN TIEMPO REAL (GLOBALES) **
+    let mqttClient = null;
+    let currentPHValue = 0; // Valor inicial/por defecto
+    let currentCEValue = 0;
+    let currentLevelValue = 0; // Valor inicial/por defecto
+    const MQTT_BROKER_URL = "wss://broker.emqx.io:8084/mqtt"; // ⬅️ EJEMPLO: USE 'ws' para WebSockets
+    const PH_TOPIC = "cultivo/ph/tv"; // ⬅️ CAMBIE ESTOS VALORES POR LOS SUYOS
+    const CE_TOPIC = "cultivo/ce/tv";
+    const NIVEL_TOPIC = "cultivo/nv/tv";
+
+    // ** FUNCIÓN GLOBAL PARA OBTENER LOS DATOS EN TIEMPO REAL **
+    // ESTO CORRIGE EL ERROR DE SCOPE PARA LA DESCARGA CSV
+    function getCurrentRealTimeData() {
+        const now = new Date();
+        // Usa formato estándar YYYY-MM-DD para la fecha
+        const dateString = now.toISOString().split('T')[0]; 
+        const timeString = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        return { 
+            fecha: dateString, 
+            hora: timeString, 
+            pH: currentPHValue, 
+            CE: currentCEValue, 
+            Nivel: currentLevelValue,
+            isRealTime: true // Bandera para identificar esta fila
+        };
+    }
+    // -----------------------------------------------------------
+
+        // ===========================================
+        // ** A. BASE DE DATOS DE USUARIOS PERSISTENTE **
+        // ===========================================
+        const USERS_STORAGE_KEY = 'scadaRegisteredUsers';
+        const DEFAULT_USERS = [
+            // Usuario por defecto
+            { username: 'admin', password: '12345', name: 'Administrador' }
+        ];
+
+        // Función para cargar usuarios desde Local Storage
+        function loadUsers() {
+            const storedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+            if (storedUsers) {
+                try {
+                    const users = JSON.parse(storedUsers);
+                    // Retorna los usuarios cargados, asegurando que si no hay nada, use los por defecto.
+                    return Array.isArray(users) && users.length > 0 ? users : DEFAULT_USERS;
+                } catch (e) {
+                    console.error("Error al cargar usuarios de Local Storage:", e);
+                    return DEFAULT_USERS;
+                }
+            }
+            return DEFAULT_USERS;
+        }
+
+        // Función para guardar usuarios en Local Storage
+        function saveUsers() {
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(registeredUsers));
+        }
+
+        // Inicializa la lista de usuarios cargando desde la memoria.
+        let registeredUsers = loadUsers(); 
+
+
+        // ** B. DATOS SIMULADOS GLOBALES (SCADA) **
+        // Array vaciado para ELIMINAR registros anteriores (SOLICITADO POR EL USUARIO)
+        const dailyData = []; 
+
+        // ======================================
+        // C) LÓGICA DE LOGIN, REGISTRO Y SESIÓN
+        // ======================================
+
+        // 1. INICIO DE SESIÓN SIMULADO
+        document.getElementById('login-form').addEventListener('submit', function(event) {
+            event.preventDefault(); 
+            simularLogin();
+        });
+
+        function simularLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Busca el usuario en la lista de registrados
+            const user = registeredUsers.find(
+                u => u.username === username && u.password === password
+            );
+
+            if (user) {
+                alert(`✅ ¡Bienvenido ${user.name || username}! Sesión iniciada.`);
+                
+                // Muestra la interfaz del SCADA
+                loginContainer.style.display = 'none';
+                scadaContainer.style.display = 'flex';
+                
+                // Ajusta estilos del cuerpo para el layout de SCADA
+                document.body.style.justifyContent = 'flex-start';
+                document.body.style.alignItems = 'flex-start';
+
+                // Carga el contenido inicial (Home)
+                loadContent('Home', true);
+
+            } else {
+                // NOTA: Si la lista de usuarios es solo el admin, recuerda la credencial.
+                if (registeredUsers.length === 1 && registeredUsers[0].username === 'admin') {
+                     alert('❌ Error: Usuario o Contraseña incorrectos. Si no ha registrado un usuario, use el predeterminado: Usuario: admin, Contraseña: 12345');
+                } else {
+                     alert('❌ Error: Usuario o Contraseña incorrectos.');
+                }
+               
+            }
+        }
+
+        // 2. CIERRE DE SESIÓN 
+        function simularLogout() {
+            alert('Cerrando sesión. Volviendo a la pantalla de Login.');
+
+	        // ** DESCONEXIÓN MQTT **
+            disconnectMQTT();
+            
+            // Oculta el SCADA
+            scadaContainer.style.display = 'none';
+            
+            // Muestra el Login
+            loginContainer.style.display = 'block';
+            
+            // Reajusta estilos del cuerpo para centrar el login
+            document.body.style.justifyContent = 'center';
+            document.body.style.alignItems = 'center';
+
+            // Limpia campos y URL
+            document.getElementById('username').value = ''; 
+            document.getElementById('password').value = '';
+            history.replaceState(null, '', window.location.pathname); // Limpia el hash de la URL
+        }
+
+        // 3. MODAL DE REGISTRO
+        function openModal() {
+            document.getElementById('registerModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('registerModal').style.display = 'none';
+        }
+
+        document.getElementById('register-form').addEventListener('submit', function(event) {
+            event.preventDefault(); 
+
+            
+            const name = document.getElementById('reg-nombre').value;
+            const correo = document.getElementById('reg-correo').value;
+            const password = document.getElementById('reg-password').value;
+            const cargo = document.getElementById('reg-cargo').value;
+            
+            // Validación: Correo no duplicado
+            if (registeredUsers.some(u => u.username === correo)) {
+                alert('❌ Error de Registro: El correo ya está registrado.');
+                return;
+            }
+            
+            // 1. Crear el nuevo usuario y guardarlo
+            const newUser = {
+                username: correo, // Usamos el correo como usuario
+                password: password,
+                name: name,
+                cargo: cargo
+            };
+            
+            registeredUsers.push(newUser);
+            
+            // **PASO CLAVE: Guardar la lista actualizada en Local Storage**
+            saveUsers();
+            
+            alert(`
+            ✅ ¡Registro Exitoso! Bienvenido, ${name}.
+            Su cuenta ha sido creada y guardada. Accediendo al sistema...
+            `);
+            
+            // 2. Limpiar modal y cerrar
+            document.getElementById('register-form').reset(); 
+            closeModal(); 
+
+            // 3. Autenticar inmediatamente al nuevo usuario
+            document.getElementById('username').value = correo; 
+            document.getElementById('password').value = password; 
+            simularLogin(); 
+        });
+
+	// ======================================
+    // E) LÓGICA DE CONEXIÓN MQTT
+    // ======================================
+
+    function connectAndSubscribe() {
+        if (mqttClient && mqttClient.connected) {
+            return; 
+        }
+        
+        // Intenta usar el protocolo ws:// si es necesario
+        const protocol = MQTT_BROKER_URL.startsWith('mqtts') ? 'wss' : (MQTT_BROKER_URL.startsWith('mqtt') ? 'ws' : 'ws'); 
+        
+        try {
+            console.log('Intentando conectar a MQTT:', MQTT_BROKER_URL);
+            
+            // 1. Inicializar el cliente
+            mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+                clean: true,
+                connectTimeout: 4000,
+                // Si su broker requiere username/password, agréguelos aquí.
+            });
+
+            // 2. Manejar eventos de conexión
+            mqttClient.on('connect', () => {
+                console.log('✅ Conectado al broker MQTT.');
+                mqttClient.subscribe(PH_TOPIC, (err) => {
+                    if (!err) {
+                        console.log(`Suscrito al tópico: ${PH_TOPIC}`);
+                    } else {
+                        console.error('Error al suscribirse:', err);
+                    }
+                });
+    
+                mqttClient.subscribe(CE_TOPIC, (err) => {
+                    if (!err) {
+                            console.log(`Suscrito al tópico: ${CE_TOPIC}`);
+                    } else {
+                            console.error('Error al suscribirse:', err);
+                    }
+                });
+
+             // AÑADIDO: Suscripción al tópico de NIVEL
+                mqttClient.subscribe(NIVEL_TOPIC, (err) => {
+                    if (!err) {
+                            console.log(`Suscrito al tópico: ${NIVEL_TOPIC}`);
+                    } else {
+                            console.error('Error al suscribirse:', err);
+                    }
+
+		});
+            });
+
+            
+            // 3. Manejar mensajes entrantes
+            mqttClient.on('message', (topic, message) => {
+                if (topic === PH_TOPIC) {
+                    try {
+                        const newPH = parseFloat(message.toString());
+                        if (!isNaN(newPH) && newPH >= 0 && newPH <= 14) {
+                            currentPHValue = newPH;
+                            console.log(`Nuevo pH recibido: ${currentPHValue}`);
+                            updatePHDisplay(); 
+                            updateNivelDisplay(); 
+                        }
+                    } catch (e) {
+                        console.error('Error al parsear el mensaje de pH:', e);
+                    }
+                }
+
+                // LECTURA DE CE
+                if (topic === CE_TOPIC) {
+                    const newCE = parseFloat(message.toString());
+                    if (!isNaN(newCE)) {
+                        currentCEValue = newCE;
+                        console.log("Nueva CE recibida:", currentCEValue);
+                        updateCEDisplay();
+                    }
+                }
+
+		// LECTURA DE NIVEL
+
+		if (topic === NIVEL_TOPIC) {
+    			const newNivel = parseFloat(message.toString());
+    		    if (!isNaN(newNivel)) {
+        		currentLevelValue = newNivel;
+        		console.log("Nuevo Nivel recibido:", currentLevelValue);
+        		updateNivelDisplay();
+    		     }
+		}
+
+            });
+
+            mqttClient.on('error', (err) => {
+                console.error('❌ Error de conexión MQTT:', err);
+            });
+
+        } catch (e) {
+            console.error("Error general al conectar MQTT:", e);
+        }
+    }
+
+    // Función para actualizar los elementos de la interfaz de pH
+    function updatePHDisplay() {
+        const phValueSpan = document.getElementById('phValue');
+        const mainContent = document.getElementById('mainContent');
+        
+        // Solo actualiza si la sección de pH está visible
+        if (phValueSpan && mainContent.innerHTML.includes('Monitoreo de pH')) {
+            phValueSpan.textContent = currentPHValue.toFixed(1);
+            phValueSpan.style.color = getPHColor(currentPHValue);
+
+            // Re-inicializa el gráfico para reflejar el nuevo valor
+            if (phChart) {
+                phChart.destroy();
+            }
+            initializePHChart(currentPHValue);
+        }
+    }
+
+
+    //Funcion para actualizar los elementos de la interfaz de CE
+    function updateCEDisplay() {
+        const ceSpan = document.getElementById("ceValue");
+        
+        if (ceSpan) {
+            ceSpan.textContent = currentCEValue.toFixed(2);
+            ceSpan.style.color = getCEColor(currentCEValue);
+        }
+    }
+    
+    //Funcion para actualizar los elementos de la interfaz de Nivel
+    function updateNivelDisplay() {
+
+        // Usar un valor por defecto si MQTT aún no ha respondido para evitar errores de NaN
+        if (currentLevelValue === null) {
+            currentLevelValue = 75; 
+        } 
+
+        const nivelSpan = document.getElementById("nivelValue");
+        const waterLevelDiv = document.getElementById("waterLevel");
+        const levelText = document.getElementById("levelText");
+
+        if (nivelSpan) {
+             nivelSpan.textContent = currentLevelValue + "%";
+             const levelStatus = getLevelStatus(currentLevelValue);
+             nivelSpan.style.color = levelStatus.color;
+        }
+
+
+        if (waterLevelDiv) {
+            waterLevelDiv.style.height = currentLevelValue + "%";
+        }
+        if (levelText) {
+            levelText.textContent = currentLevelValue + "%";
+        }
+
+        if (nivelChart) nivelChart.destroy();
+        initializeNivelChart(currentLevelValue);
+    }
+
+
+    
+    
+    // Función para desconectar
+    function disconnectMQTT() {
+        if (mqttClient && mqttClient.connected) {
+            mqttClient.end();
+            mqttClient = null;
+            console.log('Desconectado del broker MQTT.');
+        }
+    }
+
+        // ======================================
+        // D) LÓGICA DE LA INTERFAZ SCADA
+        // ======================================
+        
+        function toggleSidebar() {
+            const sidebar = document.getElementById('mySidebar');
+            sidebar.classList.toggle('expanded');
+        }
+
+        function toggleSubmenu(event, submenuId) {
+            event.preventDefault(); 
+            const submenu = document.getElementById(submenuId);
+            submenu.classList.toggle('show');
+        }
+        
+        function loadContent(type, updateHistory = false) { 
+            const mainContent = document.getElementById('mainContent');
+            let contentHTML = '';
+
+            // 1. Destruir Gráficas
+            if (phChart) {
+                phChart.destroy();
+                phChart = null;
+            }
+            if (nivelChart) {
+                nivelChart.destroy();
+                nivelChart = null;
+            }
+
+            // Lógica de Historial
+            if (updateHistory) {
+                history.pushState({ type: type }, '', `#${type}`);
+            }
+	    
+	        connectAndSubscribe();
+
+            // ----------------------------------------------------
+            // ** LÓGICA DE DATOS (SOLO TIEMPO REAL) **
+            // ----------------------------------------------------
+            
+            const dailyData = []; // La array sigue vacía, como fue solicitado.
+            let combinedData = [...dailyData]; 
+            let latestRecord = getCurrentRealTimeData(); // Llama a la función global
+
+            if (type === 'Resultados' || type === 'Analisis') {
+                 // Añade solo el registro actual (el único del día)
+                 combinedData.push(latestRecord);
+            }
+            // ----------------------------------------------------
+
+
+            // 3. Generación del Contenido
+            if (type === 'Home') {
+                contentHTML = `
+                    <div class="welcome-card dashboard-section">
+                        <h1>👋 Bienvenid@ al Sistema de Monitoreo Hidropónico</h1>
+                        <p>Esta plataforma le proporciona control y visibilidad en tiempo real de los parámetros críticos de su cultivo. Mantener la precisión en pH y CE es fundamental para la absorción de nutrientes y la salud óptima de las plantas.</p>
+                        
+                        <h3>Funcionalidades Clave:</h3>
+                        <ul>
+                            <li>**Medición en Tiempo Real:** Acceda a la información actual de pH, Conductividad Eléctrica (CE) y Nivel del depósito.</li>
+                            <li>**Resultados Diarios:** Solo se muestran las mediciones realizadas en el día actual, con la capacidad de descargar este registro para Excel.</li>
+                            <li>**Buscador:** Proporciona búsqueda directa en Google para consultas agronómicas.</li>
+                        </ul>
+                        <p>Para comenzar, pulse el icono **☰** y seleccione la medición que desea monitorear.</p>
+                    </div>
+                `;
+                mainContent.innerHTML = contentHTML;
+            
+            } else if (type === 'Buscador') {
+                // CONTENIDO DE BUSCADOR (Calculadora ELIMINADA)
+                contentHTML = `
+                    <div class="dashboard-section search-container">
+                        <h2>🔍 Buscador de Información Agronómica</h2>
+                        <div class="search-input-group">
+                            <input type="text" id="searchInput" class="search-input" placeholder="Ej: cuánto nitrógeno necesita el tomate o zonas de cultivo en Colombia">
+                            <button class="search-button" onclick="executeSearch()">Buscar</button>
+                        </div>
+                        
+                        <div id="searchResultsContainer" class="info-card" style="display: none; text-align: left;"></div>
+                    </div>
+                `;
+                mainContent.innerHTML = contentHTML;
+
+            } else if (type === 'Resultados') {
+                // CONTENIDO: RESULTADOS DIARIOS (SOLO MEDICIÓN ACTUAL, SIN TABLA)
+                contentHTML = `
+                    <div class="dashboard-section analysis-container">
+                        <h2>📊 Medición del Día Actual</h2>
+                        <p>La siguiente información representa la **lectura en tiempo real** de los parámetros.</p>
+                        
+                        <button class="export-button" onclick="exportToCSV()">Descargar Datos para Excel</button>
+
+                        <div id="dailyDataDisplay" style="margin-top: 20px;">
+                            </div>
+                    </div>
+                `;
+                mainContent.innerHTML = contentHTML;
+                displayCurrentData(combinedData); // Usa combinedData (solo la última lectura)
+
+            } else if (type === 'Analisis') {
+                // CONTENIDO: ANÁLISIS (SIN TEMPERATURA)
+                contentHTML = `
+                    <div class="dashboard-section analysis-container">
+                        <h2>📈 Análisis del Estado Actual</h2>
+                        <p>Resumen de las condiciones actuales del sistema.</p>
+                        <div id="analysisSummary">
+                            </div>
+                    </div>
+                `;
+                mainContent.innerHTML = contentHTML;
+                generateAnalysisSummary(latestRecord); // Usa solo el registro actual para el análisis
+
+            } else if (type === 'pH') {
+                // ... (Contenido de pH)
+                const currentPH = currentPHValue; 
+                let phStatusMessage = '';
+                if (currentPH < 5.0 || currentPH > 7.5) { 
+                    phStatusMessage = '<p style="color: #dc3545; font-weight: bold; font-size: 1.2em; text-align: center; border: 2px solid #dc3545; padding: 10px; border-radius: 5px;">*** DOSIFICADOR DE CONTROL PH ACTIVO ***</p>';
+                }
+
+                contentHTML += `
+                    <div class="dashboard-section">
+                        <h2>Monitoreo de pH</h2>
+                        ${phStatusMessage}
+                        <div class="measurement-display">
+                            <p>pH Actual:</p>
+                            <span id="phValue" class="measurement-value" style="color: ${getPHColor(currentPH)};">${currentPH.toFixed(1)}</span>
+                        </div>
+
+                        <h3>Gráfico de Rango de pH "Arcoíris"</h3>
+                        <div class="chart-container"><canvas id="phChartCanvas"></canvas></div>
+                    </div>
+                `;
+                mainContent.innerHTML = contentHTML;
+                initializePHChart(currentPH);
+
+            } else if (type === 'CE') {
+                const currentCE = currentCEValue; 
+                contentHTML += `<div class="dashboard-section">
+                    <h2>Monitoreo de CE (Conductividad Eléctrica)</h2>
+                    <div class="measurement-display">
+                        <p>CE Actual (mS/cm):</p>
+                        <span id="ceValue" class="measurement-value" style="color: ${getCEColor(currentCE)};">${currentCE.toFixed(1)}</span>
+                    </div>
+                    <p>La Conductividad Eléctrica indica la concentración de sales y nutrientes en la solución.</p>
+                    <p style="margin-top: 15px;">*El color indica el estado actual (Crítico, Advertencia, Óptimo).*</p>
+                </div>`;
+                mainContent.innerHTML = contentHTML;
+                
+            } else if (type === 'Nivel') {
+                const currentLevel = currentLevelValue; 
+                const levelStatus = getLevelStatus(currentLevel);
+
+                contentHTML += `<div class="dashboard-section">
+                    <h2>Monitoreo de Nivel de Solución</h2>
+                    
+                    <div class="tank-container">
+                        
+                        <div>
+                            <h3>Simulación del Tanque</h3>
+                            <div class="tank-simulation">
+                                <div id="waterLevel" class="water-level" style="height: ${currentLevel}%;">
+                                    <span id="levelText" class="level-text">${currentLevel}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="measurement-display">
+                                <p>Nivel Actual:</p>
+                                <span id="nivelValue" class="measurement-value" style="color: ${levelStatus.color};">${currentLevel}%</span>
+                                <p style="font-weight: bold; color: ${levelStatus.color};">${levelStatus.text}</p>
+                            </div>
+                            <h3>Gráfico de Rango de Nivel</h3>
+                            <div class="chart-container"><canvas id="nivelChartCanvas"></canvas></div>
+                        </div>
+
+                    </div>
+                    <p style="margin-top: 20px;">El nivel se monitorea constantemente para evitar el funcionamiento en seco de las bombas.</p>
+                </div>`;
+                mainContent.innerHTML = contentHTML;
+                initializeNivelChart(currentLevel);
+                
+            } 
+
+            // Oculta el submenú después de la selección
+            document.getElementById('medicionSubmenu').classList.remove('show');
+        }
+        
+        // --- FUNCIONES DE SCADA ---
+        
+        // Función para mostrar la medición actual (Reemplaza a populateDailyDataTable)
+        function displayCurrentData(data) {
+            const container = document.getElementById('dailyDataDisplay');
+            if (!container || data.length === 0) {
+                container.innerHTML = '<p>No hay mediciones disponibles para hoy.</p>';
+                return;
+            }
+
+            // Solo mostramos la última y única entrada (tiempo real)
+            const item = data[data.length - 1]; 
+            const nivelStatus = getLevelStatus(item.Nivel);
+            const phColor = getPHColor(item.pH);
+            const ceColor = getCEColor(item.CE);
+            
+            // Determinar si el estado de PH y CE es óptimo o requiere atención
+            let phMessage = 'Óptimo';
+            if (phColor === '#ffc107') phMessage = 'Advertencia';
+            if (phColor === '#dc3545') phMessage = 'Crítico';
+            
+            let ceMessage = 'Óptimo';
+            if (ceColor === '#ffc107') ceMessage = 'Advertencia';
+            if (ceColor === '#dc3545') ceMessage = 'Crítico';
+
+            container.innerHTML = `
+                <div class="analysis-card" style="border-left-color: #4682B4; background-color: #e6f0ff;">
+                    <h3>Última Medición en Tiempo Real</h3>
+                    <p><strong>Fecha:</strong> ${item.fecha} | <strong>Hora:</strong> ${item.hora}</p>
+                </div>
+                <div class="analysis-card" style="border-left-color: ${phColor};">
+                    <p><strong>pH:</strong> <span style="font-size: 1.2em; color: ${phColor};">${item.pH.toFixed(1)}</span></p>
+                    <p><strong>Estado:</strong> <span style="font-weight: bold; color: ${phColor};">${phMessage}</span></p>
+                </div>
+                <div class="analysis-card" style="border-left-color: ${ceColor};">
+                    <p><strong>CE (mS/cm):</strong> <span style="font-size: 1.2em; color: ${ceColor};">${item.CE.toFixed(2)}</span></p>
+                    <p><strong>Estado:</strong> <span style="font-weight: bold; color: ${ceColor};">${ceMessage}</span></p>
+                </div>
+                <div class="analysis-card" style="border-left-color: ${nivelStatus.color};">
+                    <p><strong>Nivel (%):</strong> <span style="font-size: 1.2em; color: ${nivelStatus.color};">${item.Nivel}%</span></p>
+                    <p><strong>Estado:</strong> <span style="font-weight: bold; color: ${nivelStatus.color};">${nivelStatus.text}</span></p>
+                </div>
+            `;
+        }
+
+        // Función obsoleta, se elimina su uso pero se mantiene por si acaso
+        function getPHClass(ph) {
+            if (ph >= 5.5 && ph <= 6.5) return 'pH-optimum'; 
+            if (ph > 6.5) return 'pH-high';
+            return 'pH-low'; 
+        }
+
+        /**
+         * Función de exportación a CSV, compatible con Excel mediante el uso de:
+         * 1. Separador de punto y coma (;)
+         * 2. Byte Order Mark (BOM) para la codificación UTF-8
+         * Esta función exporta SOLO la medición actual del día.
+         */
+        function exportToCSV() {
+            // Se usa el punto y coma (;) como separador para asegurar la compatibilidad con Excel
+            const separator = ';'; 
+            const headers = ['Fecha', 'Hora', 'pH', 'CE (mS/cm)', 'Nivel (%)'];
+            let csv = headers.join(separator) + '\n';
+            
+            // Llama a la función global para obtener el registro de tiempo real
+            const latestRecord = getCurrentRealTimeData();
+            
+            // Prepara la fila de datos
+            const row = [
+                latestRecord.fecha,
+                latestRecord.hora,
+                latestRecord.pH.toFixed(1),
+                latestRecord.CE.toFixed(2),
+                latestRecord.Nivel
+            ].join(separator);
+            csv += row + '\n';
+
+            const link = document.createElement("a");
+            
+            if (link.download !== undefined) { 
+                // Añade el BOM (Byte Order Mark) para que Excel reconozca correctamente el UTF-8
+                const BOM = "\uFEFF";
+                const finalBlob = new Blob([BOM, csv], { type: 'text/csv;charset=utf-8;' });
+
+                const url = URL.createObjectURL(finalBlob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "Medicion_Actual_Cultivo.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert("¡Medición actual exportada exitosamente a Medicion_Actual_Cultivo.csv!");
+            }
+        }
+
+        // Función de análisis simplificada (ya no hay promedios históricos)
+        function generateAnalysisSummary(latestRecord) {
+            const summaryDiv = document.getElementById('analysisSummary');
+            if (!summaryDiv || !latestRecord) {
+                summaryDiv.innerHTML = '<p>No hay datos disponibles para realizar un análisis.</p>';
+                return;
+            }
+
+            let phStatus = (latestRecord.pH < 5.5 || latestRecord.pH > 6.5) ? '<span style="color:red; font-weight:bold;">Requiere Ajuste</span>' : '<span style="color:green; font-weight:bold;">Óptimo</span>';
+            let nivelStatus = (latestRecord.Nivel < 30) ? '<span style="color:red; font-weight:bold;">Crítico Bajo</span>' : '<span style="color:green; font-weight:bold;">Estable</span>';
+            
+            summaryDiv.innerHTML = `
+                <div class="analysis-card">
+                    <h3>Estado General del Sistema (Lectura: ${latestRecord.hora} - ${latestRecord.fecha})</h3>
+                    <p><strong>pH Actual:</strong> ${latestRecord.pH.toFixed(1)}</p>
+                    <p><strong>CE Actual:</strong> ${latestRecord.CE.toFixed(2)} mS/cm</p>
+                    <p><strong>Nivel Actual:</strong> ${latestRecord.Nivel}%</p>
+                </div>
+
+                <div class="analysis-card" style="border-left-color: ${getPHColor(latestRecord.pH)};">
+                    <h3>Medición de pH</h3>
+                    <p><strong>Estado:</strong> ${phStatus}</p>
+                    <p><strong>Rango Ideal:</strong> 5.5 a 6.5</p>
+                </div>
+
+                <div class="analysis-card" style="border-left-color: ${getCEColor(latestRecord.CE)};">
+                    <h3>Conductividad Eléctrica (CE)</h3>
+                    <p><strong>Estado:</strong> ${latestRecord.CE.toFixed(2) < 1.2 ? '<span style="color:#ffc107; font-weight:bold;">Bajo (Nutrientes Insuficientes)</span>' : (latestRecord.CE.toFixed(2) > 2.2 ? '<span style="color:#dc3545; font-weight:bold;">Alto (Riesgo de Toxicidad)</span>' : '<span style="color:green; font-weight:bold;">Óptimo</span>')}</p>
+                    <p><strong>Rango Ideal:</strong> 1.2 a 2.2 mS/cm</p>
+                </div>
+                
+                <div class="analysis-card" style="border-left-color: ${getLevelStatus(latestRecord.Nivel).color};">
+                    <h3>Nivel de Solución</h3>
+                    <p><strong>Estado:</strong> ${nivelStatus}</p>
+                    <p><strong>Nivel Mínimo Recomendado:</strong> 30%</p>
+                </div>
+
+                <div class="analysis-card" style="border-left-color: #007bff;">
+                    <h3>Conclusión</h3>
+                    <p>Monitoree las mediciones de pH y CE y asegúrese de que el nivel del depósito se mantenga por encima del 30% para proteger las bombas.</p>
+                </div>
+            `;
+        }
+        
+        // --- FUNCIONES DE BUSCADOR ---
+
+        /**
+         * Lógica principal de búsqueda. Ahora solo redirige a Google.
+         */
+        function executeSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const query = searchInput.value.trim();
+
+            const resultsContainer = document.getElementById('searchResultsContainer'); 
+
+            // 1. LIMPIAR Y OCULTAR CONTENEDORES
+            resultsContainer.style.display = 'none';
+            resultsContainer.innerHTML = "";
+
+            if (!query) {
+                resultsContainer.innerHTML = '⚠️ Por favor, ingrese un término de búsqueda válido.';
+                resultsContainer.style.display = 'block';
+                return;
+            }
+            
+            // 2. BÚSQUEDA GENERAL EN INTERNET (REDIRECCIÓN DIRECTA A GOOGLE)
+            
+            const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+            
+            // Abrir la búsqueda en una nueva pestaña/ventana
+            window.open(url, '_blank');
+            
+            // Dar feedback al usuario dentro de la interfaz SCADA
+            resultsContainer.innerHTML = `
+                <div class="analysis-card" style="border-left-color: #28a745;">
+                    <h3>🌐 Búsqueda Externa Iniciada</h3>
+                    <p>Abriendo Google en una nueva pestaña para la consulta: <strong>"${query}"</strong>.</p>
+                    <p>Si la pestaña no se abre automáticamente (bloqueo de pop-ups), haga clic en el siguiente enlace:</p>
+                    <p><a href="${url}" target="_blank" style="color: #4682B4; font-weight: bold;">Haga clic aquí para buscar en Google</a></p>
+                </div>
+            `;
+            resultsContainer.style.display = 'block';
+
+            // Limpiar el campo de entrada
+            searchInput.value = ''; 
+        }
+        
+        // FUNCIÓN calculateSalinity ELIMINADA.
+
+        // --- Lógica de Colores y Gráficas ---
+        function getPHColor(ph) {
+            if (ph >= 5.5 && ph <= 6.5) return '#28a745'; 
+            if ((ph > 6.5 && ph <= 7.0) || (ph >= 5.0 && ph < 5.5)) return '#ffc107'; 
+            return '#dc3545'; 
+        }
+        
+        function getCEColor(ce) {
+            if (ce >= 1.2 && ce <= 2.2) return '#28a745'; 
+            if ((ce > 2.2 && ce <= 2.8) || (ce >= 0.8 && ce < 1.2)) return '#ffc107'; 
+            return '#dc3545'; 
+        }
+        
+        function getLevelStatus(level) {
+            if (level >= 70) return { text: 'ÓPTIMO', color: '#28a745' };
+            if (level >= 30 && level < 70) return { text: 'NORMAL', color: '#ffc107' };
+            return { text: 'CRÍTICO BAJO', color: '#dc3545' };
+        }
+
+        function initializePHChart(currentPH) {
+            const ctx = document.getElementById('phChartCanvas').getContext('2d');
+            const RANGES = [
+                { label: 'Crítico Bajo (< 5.0)', min: 0.0, max: 4.9, color: '#dc3545' },
+                { label: 'Advertencia Baja (5.0-5.4)', min: 5.0, max: 5.4, color: '#ffc107' },
+                { label: 'Óptimo (5.5-6.5)', min: 5.5, max: 6.5, color: '#28a745' },
+                { label: 'Advertencia Alta (6.6-7.0)', min: 6.6, max: 7.0, color: '#ffc107' },
+                { label: 'Crítico Alto (> 7.0)', min: 7.1, max: 14.0, color: '#dc3545' }
+            ];
+            const dataSegments = RANGES.map(range => range.max - range.min + 0.1); 
+            const backgroundColors = RANGES.map(range => range.color);
+            const dataLabels = RANGES.map(range => range.label);
+            phChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: dataLabels, datasets: [{ data: dataSegments, backgroundColor: backgroundColors, borderWidth: 1, borderColor: '#fff' }] },
+                options: { responsive: true, maintainAspectRatio: false, circumference: 180, rotation: -90, cutout: '80%', plugins: { legend: { display: true, position: 'bottom' }, tooltip: { callbacks: { label: (context) => context.label } } } }
+            });
+        }
+        
+        function initializeNivelChart(currentLevel) {
+            const ctx = document.getElementById('nivelChartCanvas').getContext('2d');
+            const RANGES = [
+                { label: 'Crítico Bajo (< 30%)', min: 0, max: 29, color: '#dc3545' },
+                { label: 'Normal (30-69%)', min: 30, max: 69, color: '#ffc107' },
+                { label: 'Óptimo (70-100%)', min: 70, max: 100, color: '#28a745' }
+            ];
+            const dataSegments = RANGES.map(range => range.max - range.min + 1); 
+            const backgroundColors = RANGES.map(range => range.color);
+            const dataLabels = RANGES.map(range => range.label);
+            nivelChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: dataLabels, datasets: [{ data: dataSegments, backgroundColor: backgroundColors, borderWidth: 1, borderColor: '#fff' }] },
+                options: { responsive: true, maintainAspectRatio: false, circumference: 180, rotation: -90, cutout: '80%', plugins: { legend: { display: true, position: 'bottom' }, tooltip: { callbacks: { label: (context) => context.label } } } }
+            });
+        }
+
+        // --- Historial y Control ---
+        function control(action) {
+            alert(`¡Sistema de Monitoreo ${action === 'inicio' ? 'Iniciado' : 'Detenido'}!`);
+        }
+
+        function irAtras() {
+            history.back(); 
+        }
+
+        window.addEventListener('popstate', (event) => {
+            const state = event.state;
+            
+            // Solo recarga contenido si estamos en el SCADA
+            if (scadaContainer.style.display !== 'none' && state && state.type) {
+                loadContent(state.type, false); 
+            } else if (scadaContainer.style.display !== 'none') {
+                loadContent('Home', false);
+            }
+        });
+        
+        // Inicializa la aplicación al cargar (muestra el login por defecto)
+        document.addEventListener('DOMContentLoaded', () => {
+             // El contenedor de login ya está visible por defecto en el HTML
+        });
+    </script>
+</body>
+</html>
